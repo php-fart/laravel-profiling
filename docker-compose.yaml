@@ -1,0 +1,61 @@
+version: '3.1'
+
+services:
+  my-app:
+    build: "./.docker"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.my-app-http.entrypoints=web"
+      - "traefik.http.routers.my-app-http.rule=Host(`my-app.localhost`)"
+      - "traefik.http.services.my-app-http.loadbalancer.server.port=8000"
+    volumes:
+      - ./:/app
+    networks:
+      - my-network
+
+  buggregator:
+    container_name: my1-buggregator
+    image: ghcr.io/buggregator/server:latest
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.buggregator-http.entrypoints=web"
+      - "traefik.http.routers.buggregator-http.rule=Host(`buggregator.localhost`)"
+      - "traefik.http.services.buggregator-http.loadbalancer.server.port=8000"
+    logging:
+      driver: none
+    networks:
+      - my-network
+
+  reverse-proxy:
+    container_name: my1-reverse-proxy
+    image: traefik:v2.9
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--providers.file.watch=true"
+    ports:
+      - ${TRAEFIC_PORT_HTTP:-80}:80
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    logging:
+      driver: none
+    networks:
+      - my-network
+
+  pgsql:
+    container_name: my1-pgsql
+    image: postgres:15
+    environment:
+      POSTGRES_USER: homestead
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: app
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.0.69.0/24
